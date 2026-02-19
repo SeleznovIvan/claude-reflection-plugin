@@ -16,13 +16,27 @@ The Reflection Plugin reads your Claude Code session logs (via the `cclogviewer`
 
 ## Installation
 
-```bash
-claude plugin install github.com/SeleznovIvan/claude-reflection-plugin
+### Option 1: Inside Claude Code (interactive)
+
+```
+/plugin marketplace add SeleznovIvan/claude-reflection-plugin
+/plugin install reflect@claude-reflection-plugin
 ```
 
-Then run the setup skill to install the `cclogviewer` MCP dependency and configure your project:
+Restart Claude Code to load the plugin.
+
+### Option 2: From terminal
 
 ```bash
+claude plugin marketplace add SeleznovIvan/claude-reflection-plugin
+claude plugin install reflect@claude-reflection-plugin --scope user
+```
+
+### Post-install setup
+
+Run the setup skill to install the `cclogviewer` MCP dependency and configure your project:
+
+```
 /reflect:setup
 ```
 

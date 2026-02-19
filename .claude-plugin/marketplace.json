@@ -1,0 +1,17 @@
+{
+  "name": "claude-reflection-plugin",
+  "owner": {
+    "name": "Ivan Seleznov"
+  },
+  "plugins": [
+    {
+      "name": "reflect",
+      "source": ".",
+      "description": "Analyze Claude Code session logs and propose improvements to CLAUDE.md, memory files, agent definitions, and skill definitions",
+      "version": "1.0.0",
+      "author": {
+        "name": "Ivan Seleznov"
+      }
+    }
+  ]
+}

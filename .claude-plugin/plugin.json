@@ -2,11 +2,14 @@
   "name": "reflect",
   "version": "1.0.0",
   "description": "Analyze Claude Code session logs and propose improvements to CLAUDE.md, memory files, agent definitions, and skill definitions",
-  "author": "Ivan Seleznov",
-  "repository": "github.com/SeleznovIvan/reflection-plugin",
-  "skillsDir": "./skills/",
-  "agentsDir": "./agents/",
-  "mcpServersConfigFile": "./.mcp.json",
+  "author": {
+    "name": "Ivan Seleznov",
+    "url": "https://github.com/SeleznovIvan"
+  },
+  "repository": "https://github.com/SeleznovIvan/claude-reflection-plugin",
   "license": "MIT",
-  "tags": ["reflection", "analysis", "improvement", "logs"]
+  "keywords": ["reflection", "analysis", "improvement", "logs"],
+  "skills": "./skills/",
+  "agents": "./agents/",
+  "mcpServers": "./.mcp.json"
 }

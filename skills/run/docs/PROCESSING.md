@@ -65,6 +65,36 @@ Use JSONL logs for:
 
 ---
 
+## MCP Tool Usage
+
+The worker has access to `cclogviewer` MCP tools. **Always use the `file_path` parameter** pointing to the saved local JSONL file — **never use `session_id`/`project`** parameters. The JSONL file is already saved to the workspace by the orchestrator.
+
+### Available MCP Tools
+
+| Tool | Purpose | Key Parameters |
+|------|---------|---------------|
+| `get_tool_usage_stats` | Detailed per-tool stats with timing/sequences | `file_path`, `output_path` |
+| `get_session_stats` | Lightweight session summary stats | `file_path` |
+| `get_session_timeline` | Ordered sequence of tool calls | `file_path`, `output_path` |
+| `get_session_errors` | List of errors in session | `file_path` |
+| `get_logs_around_entry` | Context around a specific log entry | `file_path`, `uuid`, `offset` |
+
+### Usage Pattern
+
+```
+# Save detailed stats to workspace file
+get_tool_usage_stats(file_path="<workspace>/raw-data/session-{uuid}-logs.jsonl", output_path="<workspace>/raw-data/session-{uuid}-tool-stats.json")
+
+# Save timeline to workspace file
+get_session_timeline(file_path="<workspace>/raw-data/session-{uuid}-logs.jsonl", output_path="<workspace>/raw-data/session-{uuid}-timeline.json")
+
+# Fetch error context (returned to context, not saved to file)
+get_logs_around_entry(file_path="<workspace>/raw-data/session-{uuid}-logs.jsonl", uuid="<error-uuid>", offset=-5)
+get_logs_around_entry(file_path="<workspace>/raw-data/session-{uuid}-logs.jsonl", uuid="<error-uuid>", offset=+5)
+```
+
+---
+
 ## Processing Steps
 
 ### Step 1: Load Session Data
@@ -83,9 +113,86 @@ From `stats.tool_stats`:
 3. Calculate success rate: `(success / count) * 100`
 4. Note patterns from `stats.tool_stats.patterns` (most_used, most_failed)
 
+### Step 2b: Fetch & Save Detailed Tool Usage Stats
+
+Call `get_tool_usage_stats` with `file_path` pointing to the local JSONL and `output_path` to save results:
+```
+get_tool_usage_stats(
+  file_path: "<workspace>/raw-data/session-{uuid}-logs.jsonl",
+  output_path: "<workspace>/raw-data/session-{uuid}-tool-stats.json"
+)
+```
+
+This saves the full detailed tool usage statistics (per-tool breakdown with timing, call sequences, etc.) to the workspace for later reference.
+
+### Step 2c: Fetch Session Timeline
+
+Call `get_session_timeline` with `file_path` and `output_path`:
+```
+get_session_timeline(
+  file_path: "<workspace>/raw-data/session-{uuid}-logs.jsonl",
+  output_path: "<workspace>/raw-data/session-{uuid}-timeline.json"
+)
+```
+
+Read the saved timeline JSON. This provides the ordered sequence of tool calls for sequence analysis in Step 2d.
+
+### Step 2d: Tool Sequence Analysis
+
+Using the timeline data from Step 2c:
+
+1. **Extract ordered tool call sequence** — list tools in execution order
+2. **Detect patterns:**
+   - **Loops**: Same tool called >3 times consecutively (may indicate spinning/retrying)
+   - **Unexpected transitions**: Tool calls that don't follow logical ordering (e.g., Write before Read)
+   - **Clusters**: Groups of related tool calls (e.g., Read→Edit→Read verification cycles)
+   - **Missing expected steps**: Standard tools that should appear but don't
+
+3. **Compare against definition (when Definition Path provided):**
+   - Read the agent/skill `.md` definition file
+   - Extract prescribed workflow steps and expected tool sequences
+   - Map actual execution sequence to expected sequence
+   - Flag deviations: skipped steps, reordered steps, extra steps not in definition
+
+### Step 2e: Definition Verification (when Definition Path provided)
+
+When a Definition Path is provided (agent/skill modes), read the definition file and cross-reference:
+
+**A. Parse Definition Frontmatter:**
+- Extract `tools:` array — these are the declared/allowed tools
+- Extract `model:`, `name:`, `description:` for reference
+
+**B. Extract Definition Body:**
+- Workflow steps (numbered/ordered instructions)
+- Prescribed commands or tool usage patterns
+- Anti-patterns ("never do X", "avoid Y")
+- Required checks or validations
+
+**C. Cross-Reference with Actual Session:**
+
+| Check | Method |
+|-------|--------|
+| Tool compliance | Compare frontmatter `tools:` vs tools actually used in session |
+| Undeclared tools | Flag tools used that aren't in frontmatter `tools:` list |
+| Unused declared tools | Flag tools in frontmatter never used (may be unnecessary) |
+| Workflow adherence | Map actual tool sequence to prescribed workflow steps |
+| Command verification | Check if prescribed commands/patterns appear in logs |
+| Anti-pattern violations | Search logs for behavior matching anti-pattern descriptions |
+
+**D. Output Findings:**
+Include a compliance summary with specific evidence from logs.
+
 ### Step 3: Analyze Error Root Causes
 
-For EACH error in `error_contexts`:
+For EACH error, use `get_logs_around_entry` with `file_path` to fetch context directly from the local JSONL:
+```
+get_logs_around_entry(file_path: "<workspace>/raw-data/session-{uuid}-logs.jsonl", uuid: "<error-uuid>", offset: -5)
+get_logs_around_entry(file_path: "<workspace>/raw-data/session-{uuid}-logs.jsonl", uuid: "<error-uuid>", offset: +5)
+```
+
+Do NOT rely on pre-fetched `error_contexts` from the stats JSON — use MCP tools to fetch error context directly from the local JSONL file.
+
+For EACH error:
 
 **A. Analyze Before Context (offset < 0):**
 Look at entries with negative offset to understand what led to the error:
@@ -162,7 +269,55 @@ Write the summary to the Output Path using the template below.
 
 ---
 
-## 2. Error Root Cause Analysis
+## 2.5 Tool Sequence Analysis
+
+### Execution Sequence
+{Ordered list of tool calls from timeline data, e.g.:}
+1. Read (PROCESSING.md)
+2. Read (stats.json)
+3. Bash (npm test)
+4. Bash (npm test) ← repeat
+5. Edit (fix.ts)
+...
+
+### Patterns Detected
+- **Loops**: {e.g., "Bash called 5x consecutively (lines 3-7) — possible retry loop"}
+- **Clusters**: {e.g., "Read→Edit→Read pattern repeated 3x — standard edit-verify cycle"}
+- **Unexpected Transitions**: {e.g., "Write before Read on same file — wrote without reading first"}
+
+### Sequence Deviations from Definition
+{Only if Definition Path was provided:}
+- **Expected**: Step 1 → Read config, Step 2 → Validate, Step 3 → Execute
+- **Actual**: Skipped validation (Step 2), went directly to Execute
+- **Impact**: {assessment}
+
+{If no Definition Path: "N/A — no definition file provided for comparison"}
+
+---
+
+## 2.6 Definition Compliance
+
+{Only if Definition Path was provided. Otherwise: "N/A — no definition file provided"}
+
+### Tool Compliance
+
+| Tool | Declared | Used | Status |
+|------|----------|------|--------|
+| Read | Yes | Yes | ✓ Compliant |
+| Bash | Yes | No | ⚠ Unused |
+| Write | No | Yes | ⚠ Undeclared |
+
+### Workflow Adherence
+- **Prescribed Steps Followed**: {X of Y}
+- **Skipped Steps**: {list}
+- **Extra Steps**: {list}
+
+### Anti-Pattern Check
+- {anti-pattern from definition}: {Compliant / Violated — with evidence}
+
+---
+
+## 3. Error Root Cause Analysis
 
 ### Errors Analyzed: {count from error_contexts}
 
@@ -185,7 +340,7 @@ Write the summary to the Output Path using the template below.
 
 ---
 
-## 3. User Feedback Extraction
+## 4. User Feedback Extraction
 
 ### Direct User Feedback from Error Contexts
 
@@ -201,7 +356,7 @@ Write the summary to the Output Path using the template below.
 
 ---
 
-## 4. Observations for Improvement
+## 5. Observations for Improvement
 
 ### What Worked Well
 1. {Positive observation}
@@ -218,7 +373,7 @@ Write the summary to the Output Path using the template below.
 
 ---
 
-## 5. Session Statistics
+## 6. Session Statistics
 
 **Token Usage**:
 - Input: {stats.summary.tokens.total_input}

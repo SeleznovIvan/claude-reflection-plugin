@@ -20,8 +20,8 @@ reflection-plugin/                          # Git repo root (installable via cla
 ├── .mcp.json                               # MCP server dependency (cclogviewer)
 ├── CLAUDE.md                               # This file — plugin instructions
 ├── skills/
-│   ├── reflect/
-│   │   ├── SKILL.md                        # Main entry point (/reflect)
+│   ├── run/
+│   │   ├── SKILL.md                        # Main entry point (/reflect:run)
 │   │   └── docs/
 │   │       ├── PROCESSING.md              # Worker agent instructions
 │   │       ├── ANALYSIS-DIRECT.md         # Strategy for direct Claude sessions
@@ -82,6 +82,14 @@ Each reflection run creates:
 └── applied-changes.md # Change log (approved + rejected)
 ```
 
+## Versioning
+
+When releasing changes, **always bump the version in BOTH files**:
+- `.claude-plugin/plugin.json` — the plugin metadata version
+- `.claude-plugin/marketplace.json` — the marketplace manifest version (this is what the installer reads)
+
+If only `plugin.json` is bumped, users will not see the update — `marketplace.json` is the source of truth for the displayed/installed version.
+
 ## Usage
 
 ```bash
@@ -89,11 +97,11 @@ Each reflection run creates:
 /reflect:setup
 
 # Analyze direct Claude usage
-/reflect direct --sessions 3 --days 14
+/reflect:run direct --sessions 3 --days 14
 
 # Analyze an agent
-/reflect agent playwright-e2e-specialist --sessions 5
+/reflect:run agent playwright-e2e-specialist --sessions 5
 
 # Analyze a skill
-/reflect skill managing-storage --sessions 3
+/reflect:run skill managing-storage --sessions 3
 ```

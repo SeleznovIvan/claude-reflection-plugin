@@ -11,7 +11,7 @@
         "repo": "SeleznovIvan/claude-reflection-plugin"
       },
       "description": "Analyze Claude Code session logs and propose improvements to CLAUDE.md, memory files, agent definitions, and skill definitions",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "author": {
         "name": "Ivan Seleznov"
       }

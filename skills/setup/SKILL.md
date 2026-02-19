@@ -1,5 +1,5 @@
 ---
-name: setup
+name: reflect:setup
 description: Install cclogviewer MCP server and create reflection-setup.json for this project
 allowed-tools: [Bash, Read, Write, AskUserQuestion,
                 mcp__cclogviewer__list_projects]

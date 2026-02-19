@@ -1,5 +1,5 @@
 ---
-name: reflect
+name: reflect:run
 description: Analyze Claude session logs and propose improvements to definitions, CLAUDE.md, or memory files
 allowed-tools: [Read, Write, Edit, Glob, Grep, Bash, Task, TodoWrite, AskUserQuestion,
                 mcp__cclogviewer__list_sessions, mcp__cclogviewer__list_projects,
@@ -154,13 +154,33 @@ mcp__cclogviewer__get_session_stats(
 )
 ```
 
-### 2.4 Fetch Error Context
+### 2.4 Fetch Detailed Tool Stats & Timeline
+
+For EACH session, save detailed tool usage stats and timeline to workspace files (these are used by workers for sequence analysis):
+
+```
+mcp__cclogviewer__get_tool_usage_stats(
+  session_id: "{id}",
+  project: "{project_name}",
+  output_path: "{WORKSPACE}/raw-data/session-{uuid}-tool-stats.json"
+)
+
+mcp__cclogviewer__get_session_timeline(
+  session_id: "{id}",
+  project: "{project_name}",
+  output_path: "{WORKSPACE}/raw-data/session-{uuid}-timeline.json"
+)
+```
+
+These can be fetched in parallel with 2.2 and 2.3.
+
+### 2.5 Fetch Error Context
 
 For EACH error UUID in stats.errors.errors[]:
 1. `get_logs_around_entry(session_id, uuid, project, offset=-5)` → before context
 2. `get_logs_around_entry(session_id, uuid, project, offset=+5)` → after context
 
-### 2.5 Save Session Metadata
+### 2.6 Save Session Metadata
 
 Write each session's stats + error contexts to `$WORKSPACE/raw-data/session-{uuid}-stats.json`:
 ```json
@@ -193,9 +213,19 @@ Process session data and create a structured summary.
 **Logs File**: {WORKSPACE}/raw-data/session-{uuid}-logs.jsonl
 **Output Path**: {WORKSPACE}/summaries/session-{uuid}-summary.md
 **Target**: {name or "direct Claude usage"}
+**Definition Path**: {definition_path or "N/A" for direct mode}
+**Workspace**: {WORKSPACE}
 
-Read the processing instructions at: {PLUGIN_ROOT}/skills/reflect/docs/PROCESSING.md
+**MCP Tool Usage**: Use MCP tools with `file_path` parameter pointing to the local JSONL file
+(Logs File above). Do NOT use `session_id`/`project` — always use `file_path` for all MCP calls.
+
+Read the processing instructions at: {PLUGIN_ROOT}/skills/run/docs/PROCESSING.md
 ```
+
+**Definition Path values:**
+- `agent` mode: `{PROJECT_ROOT}/.claude/agents/{name}.md`
+- `skill` mode: `{PROJECT_ROOT}/.claude/skills/{name}/SKILL.md`
+- `direct` mode: `N/A`
 
 Use `subagent_type: "reflection-worker"` and `model: "sonnet"`.
 
@@ -234,7 +264,7 @@ Analyze session summaries for direct Claude usage patterns.
 - {PROJECT_ROOT}/.claude/memory/ (memory files directory, if exists)
 - ~/.claude/projects/{project-slug}/memory/ (auto-memory directory, if exists)
 
-**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/reflect/docs/ANALYSIS-DIRECT.md
+**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/run/docs/ANALYSIS-DIRECT.md
 
 Analyze patterns and suggest improvements to CLAUDE.md or memory files.
 Route each suggestion to the correct target using the routing rules in the strategy doc.
@@ -250,7 +280,7 @@ Analyze session summaries against the agent definition.
 **Summaries Folder**: {WORKSPACE}/summaries/
 **Output Path**: {WORKSPACE}/analysis/analysis-report.md
 
-**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/reflect/docs/ANALYSIS-AGENT.md
+**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/run/docs/ANALYSIS-AGENT.md
 
 Read the agent definition file and ALL session summaries.
 Propose specific edits to the agent .md definition file.
@@ -266,7 +296,7 @@ Analyze session summaries against the skill definition and its outputs.
 **Summaries Folder**: {WORKSPACE}/summaries/
 **Output Path**: {WORKSPACE}/analysis/analysis-report.md
 
-**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/reflect/docs/ANALYSIS-SKILL.md
+**Analysis Strategy**: Read {PLUGIN_ROOT}/skills/run/docs/ANALYSIS-SKILL.md
 
 IMPORTANT: Skills are loaded into context when invoked via the Skill tool — the SKILL.md content
 stays in context for the entire session. Therefore, do NOT focus on tool compliance (the skill
@@ -302,9 +332,37 @@ Read the analysis report and extract each recommendation with:
 
 ### 5.2 Present Each Recommendation
 
-For EACH recommendation, ask user via AskUserQuestion:
-- Show the recommendation details including target file
-- Options: "Yes - Apply", "No - Skip", "Edit - Modify before applying"
+For EACH recommendation, present the FULL suggestion inside the AskUserQuestion tool call itself.
+Do NOT print the suggestion to chat first — put everything in the tool call so the user can review it without scrolling.
+
+Use the `markdown` preview feature on the "Apply" option to show the proposed edit inline:
+
+```
+AskUserQuestion(
+  questions: [{
+    question: "[{priority}] {target_file}\n\n{rationale}\n\nEvidence: {evidence}",
+    header: "Suggestion {N}",
+    multiSelect: false,
+    options: [
+      {
+        label: "Apply",
+        description: "Apply this change to {target_file}",
+        markdown: "## Current\n```\n{current_text}\n```\n\n## Proposed\n```\n{proposed_text}\n```"
+      },
+      {
+        label: "Skip",
+        description: "Do not apply this recommendation"
+      },
+      {
+        label: "Edit",
+        description: "Modify the proposed change before applying"
+      }
+    ]
+  }]
+)
+```
+
+This way the user sees the full diff in the AskUserQuestion preview pane — no scrolling needed.
 
 ### 5.3 Apply Approved Changes
 

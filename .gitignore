@@ -1,0 +1,7 @@
+.DS_Store
+.claude/claude-workspace/
+.claude/reflection-setup.json
+reflection-session-try1.txt
+firebase-debug.log
+reflection-plugin-plan.md
+reflection_loop_example/

@@ -10,6 +10,9 @@
   "license": "MIT",
   "keywords": ["reflection", "analysis", "improvement", "logs"],
   "skills": "./skills/",
-  "agents": "./agents/",
+  "agents": [
+    "./agents/reflection-worker.md",
+    "./agents/reflection-analyzer.md"
+  ],
   "mcpServers": "./.mcp.json"
 }
